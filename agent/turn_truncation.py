@@ -387,6 +387,11 @@ def recover_from_truncation(
         force=True, diagnostic=True,
     )
 
+    # RL rollouts (compression.enabled: false) end the episode at the output limit, as training does:
+    # no continuation nudges, which would add user turns the policy never saw.
+    if not agent.compression_enabled:
+        return st.end_turn(None, "Response truncated due to output length limit")
+
     # #106260: a context-overflow error after partial delivery must not seed a
     # continuation. _partial_stream_stub marks such stubs _overflow_terminal and
     # leaves content empty; continuing would only re-send a larger request into
