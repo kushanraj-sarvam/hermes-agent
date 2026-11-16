@@ -11,7 +11,11 @@ from typing import Any, MutableMapping, Optional, TypeVar
 # outgoing copy and the token estimator ignores them: one set, so an estimate
 # never prices bytes the provider never receives (an edit's inline_diff in
 # display_metadata is ~9KB and would trigger premature compaction).
-PERSISTENCE_ONLY_MESSAGE_FIELDS = frozenset({"timestamp", "display_kind", "display_metadata", "_row_id"})
+# Token IDs and logprobs an RL serving endpoint (NeMo Gym / vLLM) returns per turn: kept on the stored
+# message for training, never replayed to the API.
+TRAINING_TOKEN_FIELDS = ("prompt_token_ids", "generation_token_ids", "generation_log_probs")
+
+PERSISTENCE_ONLY_MESSAGE_FIELDS = frozenset({"timestamp", "display_kind", "display_metadata", "_row_id", *TRAINING_TOKEN_FIELDS})
 
 _Message = TypeVar("_Message", bound=MutableMapping[str, Any])
 

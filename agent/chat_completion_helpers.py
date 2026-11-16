@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Dict, Optional
 
+from pydantic import BaseModel
+
 from hermes_cli.timeouts import get_provider_request_timeout, get_provider_stale_timeout
 from hermes_constants import PARTIAL_STREAM_STUB_ID, FINISH_REASON_LENGTH
 from agent.error_classifier import (
@@ -39,7 +41,9 @@ from agent.gemini_native_adapter import is_native_gemini_base_url
 # misidentify and, without an api_key, return 401 on every leg (issue #89863).
 from agent.model_metadata import is_local_endpoint
 from agent.message_content import flatten_message_text
-from agent.message_metadata import PERSISTENCE_ONLY_MESSAGE_FIELDS, append_message, stamp_message_timestamp
+from agent.message_metadata import (
+    PERSISTENCE_ONLY_MESSAGE_FIELDS, TRAINING_TOKEN_FIELDS, append_message, stamp_message_timestamp,
+)
 from agent.message_sanitization import (
     _sanitize_surrogates, _repair_tool_call_arguments, normalize_finish_reason as _normalize_finish_reason,
     sanitize_outbound_kwargs, strip_images_for_rejecting_model,
@@ -1599,6 +1603,21 @@ def _assistant_tool_call_dict(agent, tool_call, index: int) -> dict:
     return tc_dict
 
 
+def copy_training_token_fields(assistant_message, msg: dict) -> None:
+    """Copy the per-turn token IDs and logprobs an RL endpoint returns onto the stored message.
+
+    The OpenAI SDK keeps fields it does not declare in ``model_extra``; adapter objects (``SimpleNamespace``)
+    carry them as plain attributes.
+    """
+    if isinstance(assistant_message, BaseModel):
+        fields = assistant_message.model_extra or {}
+    else:
+        fields = vars(assistant_message)
+    for field in TRAINING_TOKEN_FIELDS:
+        if fields.get(field) is not None:
+            msg[field] = fields[field]
+
+
 def build_assistant_message(agent, assistant_message, finish_reason: str) -> dict:
     """Build a normalized assistant message dict (reasoning, reasoning_details,
     optional tool_calls) shared by the tool-call and final-response paths.
@@ -1689,6 +1708,7 @@ def build_assistant_message(agent, assistant_message, finish_reason: str) -> dic
 
     if assistant_tool_calls:
         msg["tool_calls"] = [_assistant_tool_call_dict(agent, tc, i) for i, tc in enumerate(assistant_tool_calls)]
+    copy_training_token_fields(assistant_message, msg)
     return msg
 
 
